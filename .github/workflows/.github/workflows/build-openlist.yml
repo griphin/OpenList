@@ -1,0 +1,52 @@
+name: Build OpenList IPK for ImmortalWRT x86_64
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v3
+
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y build-essential ccache ecj fastjar file g++ gawk \
+          gettext git java-propose-classpath libelf-dev libncurses5-dev libncursesw5 \
+          libssl-dev python3 unzip wget zlib1g-dev
+
+    - name: Download ImmortalWRT SDK
+      run: |
+        wget https://downloads.immortalwrt.org/releases/24.10.2/targets/x86/64/immortalwrt-sdk-24.10.2-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        tar -xf immortalwrt-sdk-24.10.2-x86-64_gcc-12.3.0_musl.Linux-x86_64.tar.xz
+        mv immortalwrt-sdk-* sdk
+
+    - name: Prepare Package
+      run: |
+        cd sdk
+        mkdir -p package/openlist
+        cp -r ../* package/openlist
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a || true
+
+    - name: Configure SDK
+      run: |
+        cd sdk
+        make defconfig
+
+    - name: Compile OpenList
+      run: |
+        cd sdk
+        make package/openlist/compile V=s -j$(nproc)
+
+    - name: Upload IPK Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: openlist-ipk
+        path: sdk/bin/packages/*/*/*.ipk
